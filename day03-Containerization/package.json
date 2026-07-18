@@ -1,0 +1,16 @@
+{
+  "name": "day03-containerization",
+  "version": "1.0.0",
+  "description": "> 📌 Previous chapters covered **why Docker exists** and **basic Docker commands**. In this chapter, we containerize a real Node.js/Express server — build an image, run it, map ports, and persist data using volumes.",
+  "main": "server.js",
+  "type": "module",
+
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "dev" : "node server.js",
+    "start": "npx nodemon"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}
