@@ -91,13 +91,13 @@ CMD ["npm", "run", "dev"]
 
 ### 🔍 Line-by-Line Explanation
 
-| Instruction | Meaning |
-|---|---|
-| `FROM node:20-alpine` | Sets the **base image**. `alpine` = lightweight Linux distro, `node:20` = Node.js version 20 runtime installed on top of it. This defines the final image's foundation OS + runtime. |
-| `WORKDIR /app` | Sets the **working directory** inside the container. All future commands (`COPY`, `RUN`, `CMD`) execute relative to this folder. |
-| `COPY . .` | First `.` = current folder on **host machine** (your project). Second `.` = destination inside the **image** (`/app`, because of `WORKDIR`). This copies your project files from host → image. |
-| `RUN npm install` | Installs dependencies **inside the container**, ensuring OS-correct `node_modules`. |
-| `CMD ["npm", "run", "dev"]` | The command that runs **when the container starts** (not when the image is built). |
+| Instruction                 | Meaning                                                                                                                                                                                        |
+| --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `FROM node:20-alpine`       | Sets the **base image**. `alpine` = lightweight Linux distro, `node:20` = Node.js version 20 runtime installed on top of it. This defines the final image's foundation OS + runtime.           |
+| `WORKDIR /app`              | Sets the **working directory** inside the container. All future commands (`COPY`, `RUN`, `CMD`) execute relative to this folder.                                                               |
+| `COPY . .`                  | First `.` = current folder on **host machine** (your project). Second `.` = destination inside the **image** (`/app`, because of `WORKDIR`). This copies your project files from host → image. |
+| `RUN npm install`           | Installs dependencies **inside the container**, ensuring OS-correct `node_modules`.                                                                                                            |
+| `CMD ["npm", "run", "dev"]` | The command that runs **when the container starts** (not when the image is built).                                                                                                             |
 
 > 💡 `RUN` executes during **image build time**. `CMD` executes during **container run time**.
 
@@ -127,11 +127,11 @@ Run this command in the project root (where the Dockerfile is):
 docker build -t my-node-app .
 ```
 
-| Part | Meaning |
-|---|---|
-| `docker build` | Builds an image from the Dockerfile |
+| Part             | Meaning                                                           |
+| ---------------- | ----------------------------------------------------------------- |
+| `docker build`   | Builds an image from the Dockerfile                               |
 | `-t my-node-app` | `-t` = tag name → gives the image a readable name (`my-node-app`) |
-| `.` | Build context = current directory (where Dockerfile + code exist) |
+| `.`              | Build context = current directory (where Dockerfile + code exist) |
 
 ---
 
@@ -198,9 +198,9 @@ docker run -p 8080:3000 kodex:v8
 -p HOST_PORT:CONTAINER_PORT
 ```
 
-| Side | Meaning |
-|---|---|
-| **Left (8080)** | Port on your **host machine** (what you open in browser) |
+| Side             | Meaning                                                          |
+| ---------------- | ---------------------------------------------------------------- |
+| **Left (8080)**  | Port on your **host machine** (what you open in browser)         |
 | **Right (3000)** | Port **inside the container** (what your Express app listens on) |
 
 ➡️ Any request to `localhost:8080` on your machine gets **forwarded** to port `3000` inside the container.
@@ -222,11 +222,13 @@ This maps host port `8080` → MongoDB's default container port `27017`.
 ### 🧠 Simple Analogy
 
 Think of a **Volume** like an **SD card**:
+
 - It's small removable storage.
 - You save photos/videos/songs on it.
 - Even if you take it out and put it in a **different phone**, your data is still there.
 
 Similarly, a **Docker Volume**:
+
 - Is a small storage unit
 - **Managed by Docker itself**
 - **Physically lives on the host machine**
@@ -237,6 +239,7 @@ Similarly, a **Docker Volume**:
 Containers are **temporary** — by default, when a container is deleted, **all data inside it is lost** (e.g., your database records).
 
 ✅ With a volume:
+
 - Whatever data is stored inside the container gets **automatically replicated/synced** to the volume (on the host).
 - Even if the container is **deleted**, the data **survives** inside the volume.
 - A new container can be **reconnected to the same volume** to restore the data.
@@ -253,11 +256,11 @@ docker run -p HOST_PORT:CONTAINER_PORT -v volume_name:container_path image_name
 docker run -p 27019:27017 -v mongo-data:/data/db mongo:7
 ```
 
-| Part | Meaning |
-|---|---|
-| `-p 27019:27017` | Maps host port `27019` → container's MongoDB port `27017` |
+| Part                     | Meaning                                                                               |
+| ------------------------ | ------------------------------------------------------------------------------------- |
+| `-p 27019:27017`         | Maps host port `27019` → container's MongoDB port `27017`                             |
 | `-v mongo-data:/data/db` | Creates/uses a volume named `mongo-data`, synced with `/data/db` inside the container |
-| `mongo:7` | The MongoDB image (version 7) being used |
+| `mongo:7`                | The MongoDB image (version 7) being used                                              |
 
 ### What Happens Here?
 
