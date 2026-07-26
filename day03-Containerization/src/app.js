@@ -7,7 +7,7 @@ app.use(express.json());
 app.use(morgan("dev"));
 
 app.get("/", (req, res) => {
-  res.status(200).json({ message: "Welcome to the API" });
+  res.status(200).json({ message: "Welcome to Vivek Dev Hub Docker Series" });
 });
 
 export default app;
