@@ -1,296 +1,1211 @@
-# Chapter 3 - Running Express Server Inside a Docker Container
+# 🐳 Chapter 3 – Dockerizing Our Application
 
-## Dockerfile | Image Build | Port Mapping | Volumes
+In this chapter, we will learn how to **Dockerize a Node.js/Express application** and understand the core Docker concepts required for running applications inside containers.
 
-> 📌 Previous chapters covered **why Docker exists** and **basic Docker commands**. In this chapter, we containerize a real Node.js/Express server — build an image, run it, map ports, and persist data using volumes.
+## 📚 What We Will Learn
 
----
-
-## 🎯 What We'll Do in This Chapter
-
-- Run a Node.js Express server inside a container
-- Understand what goes inside a Docker Image
-- Create and understand a `Dockerfile`
-- Solve the `node_modules` OS-compatibility problem
-- Use `.dockerignore` to exclude unnecessary files
-- Build and run a Docker Image
-- Fix the "nodemon watching too much" problem
-- Understand Port Mapping (host ↔ container)
-- Understand Volumes (persistent storage)
+* How Docker runs a Node.js/Express project
+* What is a Dockerfile?
+* Docker Image vs Docker Container
+* How to build a Docker Image
+* How to run a Docker Container
+* Docker Port Mapping
+* Bind Mounts / Code Mapping
+* Docker Volumes
+* MongoDB Data Persistence
+* Running an Express Server inside Docker
+* Important Dockerfile instructions
 
 ---
 
-## 🧱 Step 1 - Create a Normal Node.js Project
+# 🏗️ Docker Architecture
 
-Before containerizing anything, first build a normal Node.js project outside Docker:
+The basic Docker workflow is:
 
-1. Initialize a Node.js project (`npm init`)
-2. Install Express
-3. Write a basic server
-4. Run it normally with `npm run dev` / `node server.js`
-
-✅ Make sure the server runs successfully **on your machine first**, before putting it inside Docker.
-
----
-
-## 📦 Recap - What's Inside an Image?
-
-When we run an image, a **container** is created from it.
-
-An image contains **4 core things**:
-
+```text
+Node.js / Express Project
+          │
+          ▼
+      Dockerfile
+          │
+     docker build
+          │
+          ▼
+     Docker Image
+          │
+      docker run
+          │
+          ▼
+   Docker Container
+          │
+          ▼
+    Running Application
 ```
+
+---
+
+# 1️⃣ Create a Normal Node.js Project
+
+First, create a normal Node.js project without Docker.
+
+```bash
+mkdir docker-app
+cd docker-app
+
+npm init -y
+```
+
+Install dependencies:
+
+```bash
+npm install express mongoose morgan
+```
+
+Install Nodemon for development:
+
+```bash
+npm install -D nodemon
+```
+
+---
+
+# 2️⃣ Configure `package.json`
+
+Use ES Modules and configure development scripts.
+
+```json
+{
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "dev": "nodemon server.js",
+    "start": "node server.js"
+  }
+}
+```
+
+---
+
+# 3️⃣ Create `server.js`
+
+```js
+import express from "express";
+
+const app = express();
+
+app.get("/", (req, res) => {
+  res.send("Hello from Docker!");
+});
+
+app.listen(3000, () => {
+  console.log("Server running on port 3000");
+});
+```
+
+Run the application normally:
+
+```bash
+npm run dev
+```
+
+Application:
+
+```text
+http://localhost:3000
+```
+
+---
+
+# 4️⃣ What is a Dockerfile?
+
+A **Dockerfile** is a text file containing instructions that tell Docker how to build a Docker Image.
+
+Think of it as a **blueprint for creating an image**.
+
+```text
+Dockerfile
+     │
+     │ docker build
+     ▼
+Docker Image
+     │
+     │ docker run
+     ▼
+Docker Container
+```
+
+> Dockerfile → Image → Container
+
+---
+
+# 5️⃣ What is inside a Docker Image?
+
+A Docker Image can contain:
+
+```text
 Docker Image
 │
-├── Operating System (base OS files)
+├── Base OS / Linux userspace
 ├── Node.js Runtime
-├── Dependencies (node_modules)
+├── Dependencies
 └── Application Code
 ```
 
----
-
-## ⚠️ Important - node_modules Are OS-Specific!
-
-> **Question:** Is `node_modules` different for different operating systems?
-> **Answer:** ✅ Yes.
-
-Some npm packages contain **native binaries** (compiled C/C++ code) that are built specifically for an OS (Windows/macOS/Linux). This means:
-
-- `node_modules` installed on **Windows** may **not work** inside a **Linux-based container**.
-- This is why we **never copy `node_modules` from host to image**.
-- Instead, we let Docker **run `npm install` inside the container itself**, so the correct OS-specific modules get installed.
-
-This is exactly why `.dockerignore` will be used to exclude `node_modules` (explained below).
+For a Node.js application, we can use an official Node.js image as our base.
 
 ---
 
-## 🐳 Step 2 - Create a `Dockerfile`
+# 6️⃣ `FROM node:20-alpine`
 
-Create a new file in your **project root directory** named exactly:
-
+```dockerfile
+FROM node:20-alpine
 ```
+
+`FROM` defines the **base image**.
+
+Here:
+
+```text
+node:20
+   ↓
+Node.js version 20
+
+alpine
+   ↓
+Lightweight Linux distribution
+```
+
+So:
+
+```text
+Node.js 20
+     +
+Alpine Linux
+     ↓
+Base Image
+```
+
+### Why Alpine?
+
+Alpine is lightweight compared to many general-purpose Linux distributions.
+
+Benefits:
+
+* Smaller image size
+* Faster download
+* Less storage
+* Faster deployment
+
+---
+
+# 7️⃣ `WORKDIR /app`
+
+```dockerfile
+WORKDIR /app
+```
+
+This sets the working directory inside the image/container.
+
+After this instruction, commands such as `COPY`, `RUN`, and `CMD` operate relative to `/app` unless otherwise specified.
+
+The container structure can look like:
+
+```text
+/app
+│
+├── package.json
+├── package-lock.json
+├── server.js
+└── node_modules
+```
+
+---
+
+# 8️⃣ `COPY . .`
+
+```dockerfile
+COPY . .
+```
+
+The syntax is:
+
+```text
+COPY <host-path> <image-path>
+```
+
+In:
+
+```dockerfile
+WORKDIR /app
+
+COPY . .
+```
+
+The first `.` means:
+
+```text
+Current project directory on the host
+```
+
+The second `.` means:
+
+```text
+Current working directory inside the image
+```
+
+So:
+
+```text
+Host Project
+│
+├── package.json
+├── server.js
+└── src/
+       │
+       │ COPY
+       ▼
+Container /app
+│
+├── package.json
+├── server.js
+└── src/
+```
+
+---
+
+# 9️⃣ `RUN npm install`
+
+```dockerfile
+RUN npm install
+```
+
+`RUN` executes a command during the **image build process**.
+
+It reads `package.json` and installs the application's dependencies inside the image.
+
+```text
+docker build
+     ↓
+RUN npm install
+     ↓
+Dependencies installed
+     ↓
+Image created
+```
+
+---
+
+# 🔟 `CMD`
+
+```dockerfile
+CMD ["npm", "run", "dev"]
+```
+
+`CMD` specifies the default command that runs when a container starts from the image.
+
+```text
+docker run
+     ↓
+Container starts
+     ↓
+CMD executes
+     ↓
+npm run dev
+     ↓
+Express Server
+```
+
+### RUN vs CMD
+
+```text
+RUN
+ ↓
+Image build time
+
+CMD
+ ↓
+Container start/run time
+```
+
+Easy way to remember:
+
+> **RUN = Image banate waqt**
+
+> **CMD = Container chalate waqt**
+
+---
+
+# 1️⃣1️⃣ Complete Dockerfile
+
+Create a file named:
+
+```text
 Dockerfile
 ```
 
-(No extension — just `Dockerfile`)
-
-### Dockerfile Code
+Add:
 
 ```dockerfile
 FROM node:20-alpine
 
 WORKDIR /app
 
-COPY . .
+COPY package*.json ./
 
 RUN npm install
+
+COPY . .
+
+EXPOSE 3000
 
 CMD ["npm", "run", "dev"]
 ```
 
-### 🔍 Line-by-Line Explanation
+---
 
-| Instruction                 | Meaning                                                                                                                                                                                        |
-| --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `FROM node:20-alpine`       | Sets the **base image**. `alpine` = lightweight Linux distro, `node:20` = Node.js version 20 runtime installed on top of it. This defines the final image's foundation OS + runtime.           |
-| `WORKDIR /app`              | Sets the **working directory** inside the container. All future commands (`COPY`, `RUN`, `CMD`) execute relative to this folder.                                                               |
-| `COPY . .`                  | First `.` = current folder on **host machine** (your project). Second `.` = destination inside the **image** (`/app`, because of `WORKDIR`). This copies your project files from host → image. |
-| `RUN npm install`           | Installs dependencies **inside the container**, ensuring OS-correct `node_modules`.                                                                                                            |
-| `CMD ["npm", "run", "dev"]` | The command that runs **when the container starts** (not when the image is built).                                                                                                             |
+# 1️⃣2️⃣ Build Docker Image
 
-> 💡 `RUN` executes during **image build time**. `CMD` executes during **container run time**.
+Run this command from the project root:
+
+```bash
+docker build -t vivek-first-image .
+```
+
+Explanation:
+
+```text
+docker build
+    ↓
+Build an image
+
+-t
+    ↓
+Give the image a name/tag
+
+vivek-first-image
+    ↓
+Image name
+
+.
+    ↓
+Current directory / build context
+```
 
 ---
 
-## 🚫 Step 3 - Create `.dockerignore`
+# 1️⃣3️⃣ Run Docker Container
 
-Just like `.gitignore`, create a file named `.dockerignore` in the root folder:
+After creating the image:
 
+```bash
+docker run vivek-first-image
 ```
+
+Docker creates a container from the image and starts it.
+
+```text
+Dockerfile
+     ↓
+docker build
+     ↓
+Image
+     ↓
+docker run
+     ↓
+Container
+```
+
+You can give the container your own name:
+
+```bash
+docker run --name my-node-container vivek-first-image
+```
+
+---
+
+# 1️⃣4️⃣ Check Docker Images
+
+To see all available Docker Images:
+
+```bash
+docker images
+```
+
+You may see:
+
+```text
+REPOSITORY          TAG       IMAGE ID
+vivek-first-image   latest    abc123
+second-image        latest    xyz456
+third-image         latest    pqr789
+```
+
+---
+
+# 1️⃣5️⃣ Important: Images Don't Automatically Update
+
+If you modify your Dockerfile or application files, Docker does **not** automatically rebuild the existing image.
+
+You need to build the image again:
+
+```bash
+docker build -t vivek-first-image .
+```
+
+Then create/run a container from the updated image.
+
+---
+
+# 1️⃣6️⃣ `.dockerignore`
+
+Create:
+
+```text
+.dockerignore
+```
+
+Example:
+
+```text
 node_modules
+.git
+.env
+npm-debug.log
 ```
 
-### Why?
+### Why ignore `node_modules`?
 
-- We don't want the host's `node_modules` copied into the image (OS-mismatch problem explained above).
-- Docker will **skip/ignore** this folder while copying files via `COPY . .`
-- Instead, `npm install` (inside Dockerfile) will generate a fresh, correct `node_modules` inside the container.
+Host `node_modules` may contain dependencies with native binaries that are specific to the host OS/CPU.
+
+For example:
+
+```text
+Mac
+ ↓
+node_modules
+ ↓
+Potentially Mac-specific native binaries
+```
+
+But the Docker container is typically Linux-based:
+
+```text
+Docker Container
+ ↓
+Linux
+ ↓
+Linux-compatible dependencies
+```
+
+Therefore, instead of copying the host's `node_modules`, install dependencies inside the image:
+
+```dockerfile
+RUN npm install
+```
 
 ---
 
-## 🏗️ Step 4 - Build the Docker Image
+# 1️⃣7️⃣ Common Error: `nodemon: not found`
 
-Run this command in the project root (where the Dockerfile is):
+You may see:
+
+```text
+nodemon: not found
+```
+
+This can happen when Nodemon is not installed inside the container.
+
+If `nodemon` is a development dependency, make sure your Docker build installs development dependencies and that your `package.json` contains:
+
+```json
+{
+  "scripts": {
+    "dev": "nodemon server.js"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.0"
+  }
+}
+```
+
+Then rebuild the image:
 
 ```bash
-docker build -t my-node-app .
+docker build -t vivek-first-image .
 ```
-
-| Part             | Meaning                                                           |
-| ---------------- | ----------------------------------------------------------------- |
-| `docker build`   | Builds an image from the Dockerfile                               |
-| `-t my-node-app` | `-t` = tag name → gives the image a readable name (`my-node-app`) |
-| `.`              | Build context = current directory (where Dockerfile + code exist) |
 
 ---
 
-## ▶️ Step 5 - Run the Container
+# 1️⃣8️⃣ Port Mapping
+
+Containers are isolated environments.
+
+Suppose our Express application is running inside the container on:
+
+```text
+Container :3000
+```
+
+The host/browser cannot automatically access that container port.
+
+We use **Port Mapping**.
 
 ```bash
-docker run my-node-app
+docker run -p 3000:3000 vivek-first-image
 ```
 
-### ❌ Common Error: `nodemon: not found`
-
-**Cause:** `node_modules` (including dev dependencies like `nodemon`) weren't properly installed inside the image.
-
-**Fix:** Make sure `RUN npm install` is present in the Dockerfile **before** `CMD`. This reads `package.json` and installs **all** required packages (including `nodemon`) inside the container.
-
----
-
-## ⏹️ Stop a Running Container
+Syntax:
 
 ```bash
-docker stop container_id
+docker run -p HOST_PORT:CONTAINER_PORT IMAGE_NAME
+```
+
+Example:
+
+```text
+-p 3000:3000
+   │     │
+   │     └── Container Port
+   └──────── Host Port
+```
+
+Flow:
+
+```text
+Browser
+   │
+   │ localhost:3000
+   ▼
+Host Machine :3000
+   │
+   │ Port Mapping
+   ▼
+Container :3000
+   │
+   ▼
+Express Server
+```
+
+Now open:
+
+```text
+http://localhost:3000
 ```
 
 ---
 
-## ⚙️ Problem - Nodemon Consuming Too Much RAM
+# 1️⃣9️⃣ Host Port and Container Port Can Be Different
 
-**Issue:** Nodemon is supposed to watch only your **application code** for changes. But inside the container, if your code sits directly in the root (`/app`), nodemon ends up watching **the entire filesystem**, including unrelated Linux system files — causing **huge, unnecessary RAM usage**.
+They do not have to be the same.
 
-### ✅ Solution
-
-Don't keep your app code directly in root. Instead:
-
-1. Create a dedicated subfolder, e.g. `app/`
-2. Move all your project code (server files, routes, package.json, etc.) inside `app/`
-3. Run nodemon **from within `app/`**
-
-Now nodemon only watches the `app/` folder — not the whole container filesystem.
-
-```
-Project Root
-│
-└── app/              ← nodemon watches only this
-    ├── server.js
-    ├── package.json
-    └── ...
-```
-
-This keeps nodemon's file-watching scope small, fixing the RAM/performance issue.
-
----
-
-## 🔌 Port Mapping - Host ↔ Container
-
-By default, a container's internal port is **not accessible** from your browser/host machine. We need to explicitly map ports.
+For example:
 
 ```bash
-docker run -p 8080:3000 kodex:v8
+docker run -p 8080:3000 vivek-first-image
 ```
 
-### Syntax
+Means:
 
+```text
+Browser
+   ↓
+localhost:8080
+   ↓
+Host :8080
+   ↓
+Container :3000
+   ↓
+Express Server
 ```
+
+Open:
+
+```text
+http://localhost:8080
+```
+
+Remember:
+
+```text
 -p HOST_PORT:CONTAINER_PORT
 ```
 
-| Side             | Meaning                                                          |
-| ---------------- | ---------------------------------------------------------------- |
-| **Left (8080)**  | Port on your **host machine** (what you open in browser)         |
-| **Right (3000)** | Port **inside the container** (what your Express app listens on) |
-
-➡️ Any request to `localhost:8080` on your machine gets **forwarded** to port `3000` inside the container.
-
-> 💡 You can change the host-side port freely (e.g. `9090:3000`), but the container-side port must match what your app actually listens on internally.
-
-### Example with MongoDB
-
-```bash
-docker run -p 8080:27017 mongo
-```
-
-This maps host port `8080` → MongoDB's default container port `27017`.
-
 ---
 
-## 💾 Volumes - Persistent Storage
+# 2️⃣0️⃣ `EXPOSE`
 
-### 🧠 Simple Analogy
+Dockerfile:
 
-Think of a **Volume** like an **SD card**:
+```dockerfile
+EXPOSE 3000
+```
 
-- It's small removable storage.
-- You save photos/videos/songs on it.
-- Even if you take it out and put it in a **different phone**, your data is still there.
+`EXPOSE` indicates the port that the application inside the image is intended to use.
 
-Similarly, a **Docker Volume**:
+However:
 
-- Is a small storage unit
-- **Managed by Docker itself**
-- **Physically lives on the host machine**
-- Independent of any single container's lifecycle
+```dockerfile
+EXPOSE 3000
+```
 
-### Why Do We Need Volumes?
+does **not** publish the port to your host by itself.
 
-Containers are **temporary** — by default, when a container is deleted, **all data inside it is lost** (e.g., your database records).
-
-✅ With a volume:
-
-- Whatever data is stored inside the container gets **automatically replicated/synced** to the volume (on the host).
-- Even if the container is **deleted**, the data **survives** inside the volume.
-- A new container can be **reconnected to the same volume** to restore the data.
-
-### Volume Command Syntax
+For host access, use:
 
 ```bash
-docker run -p HOST_PORT:CONTAINER_PORT -v volume_name:container_path image_name
-```
-
-### Example - MongoDB with Volume
-
-```bash
-docker run -p 27019:27017 -v mongo-data:/data/db mongo:7
-```
-
-| Part                     | Meaning                                                                               |
-| ------------------------ | ------------------------------------------------------------------------------------- |
-| `-p 27019:27017`         | Maps host port `27019` → container's MongoDB port `27017`                             |
-| `-v mongo-data:/data/db` | Creates/uses a volume named `mongo-data`, synced with `/data/db` inside the container |
-| `mongo:7`                | The MongoDB image (version 7) being used                                              |
-
-### What Happens Here?
-
-- MongoDB, by default, stores its database files inside `/data/db` **inside the container**.
-- By mapping `mongo-data:/data/db`, Docker keeps this folder **in sync** with the `mongo-data` volume on the host.
-- So even if this MongoDB container is stopped/deleted, your database data stays safe inside the `mongo-data` volume.
-- Next time you run a new container with `-v mongo-data:/data/db`, it picks up the **same data** again.
-
-```
-Container (/data/db)  ⇄  Volume (mongo-data, on host)
-        [in sync — data persists even after container deletion]
+docker run -p 3000:3000 vivek-first-image
 ```
 
 ---
 
-## 🎯 Chapter 3 Summary
+# 2️⃣1️⃣ Bind Mounts / Code Mapping
 
-- ✅ Ran an Express server inside a Docker container
-- ✅ Understood the 4 components of an Image (OS, Runtime, Dependencies, Code)
-- ✅ Learned why `node_modules` are OS-specific
-- ✅ Created a `Dockerfile` (`FROM`, `WORKDIR`, `COPY`, `RUN`, `CMD`)
-- ✅ Used `.dockerignore` to exclude `node_modules`
-- ✅ Built an image using `docker build -t`
-- ✅ Ran and stopped containers
-- ✅ Fixed the nodemon high-RAM-usage issue using a dedicated app folder
-- ✅ Understood Port Mapping (`-p host:container`)
-- ✅ Understood Volumes (`-v volume_name:container_path`) for persistent storage
+During development, we don't want to rebuild the Docker image every time we change code.
+
+We can use a **Bind Mount**.
+
+```text
+Host Project
+     │
+     │ Bind Mount
+     ▼
+Container /app
+```
+
+Example:
+
+```bash
+docker run -p 3000:3000 -v "$(pwd):/app" vivek-first-image
+```
+
+Now changes made on the host can be reflected inside the container.
+
+With Nodemon:
+
+```text
+Host Code Change
+       ↓
+Bind Mount
+       ↓
+Container sees the change
+       ↓
+Nodemon detects change
+       ↓
+Server restarts
+       ↓
+Latest code runs
+```
+
+### Port Mapping vs Bind Mount
+
+```text
+PORT MAPPING
+Browser
+   ↓
+Host Port
+   ↓
+Container Port
+   ↓
+Application
+```
+
+```text
+BIND MOUNT
+Host Code
+   ↓
+Container Code
+   ↓
+Nodemon
+   ↓
+Application Restart
+```
+
+They solve **different problems**.
 
 ---
 
-## 🚀 Coming Next
+# 2️⃣2️⃣ Docker Volumes
 
-**Chapter 4** — Docker Compose, multi-container setups, and networking between containers 🚀
+A Docker Volume is used for **persistent data storage**.
+
+This becomes especially important for databases such as MongoDB.
+
+Without a volume:
+
+```text
+MongoDB Container
+       │
+       └── Database Data
+
+Container deleted
+       ↓
+Data may be lost
+```
+
+With a volume:
+
+```text
+MongoDB Container
+       │
+       ▼
+Docker Volume
+       │
+       ▼
+Persistent Database Data
+```
+
+The volume has its own lifecycle separate from the container.
+
+---
+
+# 2️⃣3️⃣ MongoDB Container
+
+Run MongoDB:
+
+```bash
+docker run mongo:7
+```
+
+To expose MongoDB to the host:
+
+```bash
+docker run -p 27019:27017 mongo:7
+```
+
+Mapping:
+
+```text
+Host :27019
+     ↓
+Container :27017
+     ↓
+MongoDB
+```
+
+Your MongoDB client can connect using:
+
+```text
+localhost:27019
+```
+
+---
+
+# 2️⃣4️⃣ MongoDB + Docker Volume
+
+Create a volume:
+
+```bash
+docker volume create mongo-data
+```
+
+Run MongoDB with the volume:
+
+```bash
+docker run \
+  --name my-mongo \
+  -p 27019:27017 \
+  -v mongo-data:/data/db \
+  mongo:7
+```
+
+Flow:
+
+```text
+MongoDB Container
+       │
+       │ /data/db
+       ▼
+Docker Volume
+   mongo-data
+       │
+       ▼
+Persistent Data
+```
+
+If the MongoDB container is removed and recreated using the same volume, the database data can remain available.
+
+---
+
+# 2️⃣5️⃣ Bind Mount vs Docker Volume
+
+| Feature            | Bind Mount                                    | Docker Volume               |
+| ------------------ | --------------------------------------------- | --------------------------- |
+| Storage managed by | Host filesystem                               | Docker                      |
+| Common use         | Development code                              | Persistent application data |
+| Code sync          | ✅ Yes                                         | ❌ Not the primary purpose   |
+| MongoDB data       | Possible, but not usually the simplest choice | ✅ Recommended               |
+| Example            | `-v "$(pwd):/app"`                            | `-v mongo-data:/data/db`    |
+
+### Easy way to remember:
+
+```text
+Bind Mount
+     ↓
+Host Code ↔ Container Code
+
+Volume
+     ↓
+Container Data ↔ Persistent Storage
+```
+
+---
+
+# 2️⃣6️⃣ Important Dockerfile Instructions
+
+## FROM
+
+Defines the base image.
+
+```dockerfile
+FROM node:20-alpine
+```
+
+---
+
+## WORKDIR
+
+Sets the working directory.
+
+```dockerfile
+WORKDIR /app
+```
+
+---
+
+## COPY
+
+Copies files from the build context into the image.
+
+```dockerfile
+COPY . .
+```
+
+---
+
+## RUN
+
+Executes commands during image build.
+
+```dockerfile
+RUN npm install
+```
+
+Multiple `RUN` instructions can be used.
+
+---
+
+## CMD
+
+Defines the default command when the container starts.
+
+```dockerfile
+CMD ["npm", "run", "dev"]
+```
+
+An image can have only one effective `CMD` instruction; if multiple are specified, the last one takes effect.
+
+---
+
+## EXPOSE
+
+Documents the port the application is intended to listen on.
+
+```dockerfile
+EXPOSE 3000
+```
+
+---
+
+## ENV
+
+Sets environment variables.
+
+```dockerfile
+ENV PORT=3000
+```
+
+---
+
+# 2️⃣7️⃣ Build Phase vs Run Phase
+
+This distinction is extremely important.
+
+## Build Phase
+
+When we execute:
+
+```bash
+docker build -t my-image .
+```
+
+Docker processes instructions such as:
+
+```text
+FROM
+WORKDIR
+COPY
+RUN
+```
+
+Flow:
+
+```text
+Dockerfile
+    ↓
+FROM
+    ↓
+WORKDIR
+    ↓
+COPY
+    ↓
+RUN
+    ↓
+Docker Image
+```
+
+---
+
+## Run Phase
+
+When we execute:
+
+```bash
+docker run my-image
+```
+
+The container starts and the default command from `CMD` executes.
+
+```text
+Docker Image
+    ↓
+docker run
+    ↓
+Container
+    ↓
+CMD
+    ↓
+Application
+```
+
+### Easy Rule
+
+```text
+BUILD → FROM, WORKDIR, COPY, RUN
+
+RUN   → CMD
+```
+
+---
+
+# 🧠 Quick Revision
+
+```text
+Dockerfile
+    ↓
+Blueprint / Instructions
+
+Docker Image
+    ↓
+Packaged template created from Dockerfile
+
+Docker Container
+    ↓
+Running instance of an image
+
+Port Mapping
+    ↓
+Host Port ↔ Container Port
+
+Bind Mount
+    ↓
+Host Code ↔ Container
+
+Docker Volume
+    ↓
+Persistent Data
+
+MongoDB Volume
+    ↓
+Database survives container recreation
+```
+
+---
+
+# 🔥 Most Important Commands
+
+### Build Image
+
+```bash
+docker build -t my-image .
+```
+
+### Run Container
+
+```bash
+docker run my-image
+```
+
+### Run with Port Mapping
+
+```bash
+docker run -p 3000:3000 my-image
+```
+
+### Run with Container Name
+
+```bash
+docker run --name my-container my-image
+```
+
+### List Images
+
+```bash
+docker images
+```
+
+### List Running Containers
+
+```bash
+docker ps
+```
+
+### List All Containers
+
+```bash
+docker ps -a
+```
+
+### Create Volume
+
+```bash
+docker volume create mongo-data
+```
+
+### Run MongoDB with Port Mapping
+
+```bash
+docker run -p 27019:27017 mongo:7
+```
+
+### Run MongoDB with Volume
+
+```bash
+docker run \
+  --name my-mongo \
+  -p 27019:27017 \
+  -v mongo-data:/data/db \
+  mongo:7
+```
+
+---
+
+# 🎯 Interview Questions
+
+### 1. What is Dockerfile?
+
+A Dockerfile is a text file containing instructions used to build a Docker Image.
+
+### 2. What is Docker Image?
+
+A Docker Image is a packaged, read-only template containing the application code, runtime, dependencies, and required filesystem layers needed to create containers.
+
+### 3. What is Docker Container?
+
+A Container is a running, isolated instance created from a Docker Image.
+
+### 4. What is Port Mapping?
+
+Port Mapping connects a host machine port to a container port.
+
+```bash
+docker run -p 3000:3000 image
+```
+
+### 5. What is Bind Mount?
+
+A Bind Mount maps a directory/file from the host machine into the container, commonly used for development and live code changes.
+
+### 6. What is Docker Volume?
+
+A Docker Volume provides Docker-managed persistent storage that can survive container removal.
+
+### 7. Difference between RUN and CMD?
+
+```text
+RUN → Executes during image build
+
+CMD → Default command when container starts
+```
+
+### 8. Why use `.dockerignore`?
+
+To prevent unnecessary or sensitive files such as `node_modules`, `.git`, and `.env` from being sent into the Docker build context.
+
+### 9. Why use Docker Volume with MongoDB?
+
+Because database data should survive container removal/recreation.
+
+### 10. Why use Port Mapping?
+
+Because a container's network is isolated. Port mapping allows services inside the container to be reached through a port on the host.
+
+---
+
+# 🔗 Reference Documentation
+
+Official Docker documentation:
+
+https://docs.docker.com/get-started/docker-concepts/building-images/writing-a-dockerfile/
+
+---
+
+# 🚀 Chapter Summary
+
+In this chapter, we learned how to take a normal Node.js/Express application and run it inside Docker.
+
+The complete process is:
+
+```text
+Node.js Project
+      ↓
+Dockerfile
+      ↓
+docker build
+      ↓
+Docker Image
+      ↓
+docker run
+      ↓
+Docker Container
+      ↓
+Port Mapping
+      ↓
+Browser
+```
+
+For development:
+
+```text
+Host Code
+    ↓
+Bind Mount
+    ↓
+Container
+    ↓
+Nodemon
+    ↓
+Automatic Restart
+```
+
+For databases:
+
+```text
+MongoDB Container
+       ↓
+Docker Volume
+       ↓
+Persistent Data
+```
+
+> **Dockerfile builds the image, the image creates the container, Port Mapping exposes the application, Bind Mount syncs development code, and Volumes preserve important data.**
+
